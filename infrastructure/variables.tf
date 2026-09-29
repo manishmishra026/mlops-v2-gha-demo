@@ -28,4 +28,6 @@ variable "enable_monitoring" {
 
 variable "client_secret" {
   description = "Service Principal Secret"
+  default     = ""  # Add a default empty value
+  sensitive   = true
 }
