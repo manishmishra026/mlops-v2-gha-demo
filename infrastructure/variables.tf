@@ -35,17 +35,3 @@ variable "github_actions_service_principal_id" {
   description = "Object ID of the GitHub Actions service principal"
   type        = string
 }
-variable "subscription_id" {
-  description = "Azure subscription ID"
-  type        = string
-}
-
-variable "tenant_id" {
-  description = "Azure tenant ID"
-  type        = string
-}
-
-variable "client_id" {
-  description = "Azure client ID"
-  type        = string
-}
