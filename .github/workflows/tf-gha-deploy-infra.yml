@@ -1,50 +1,63 @@
-name: tf-gha-deploy-infra.yml
+name: deploy-model-training-pipeline
 
-on:
+on: 
   workflow_dispatch:
-
-permissions:
-  id-token: write
-  contents: read
-
-env:
-  config_env: "none"
-
 jobs:
   get-config:
-    uses: Azure/mlops-templates/.github/workflows/read-yaml.yml@main
-    with:
-      file_name: config-infra-prod.yml
-
-  test-terraform-state-deployment:
+      uses: Azure/mlops-templates/.github/workflows/read-yaml.yml@main
+      with:
+        file_name: config-infra-prod.yml
+  register-environment:
+      needs: get-config
+      uses: Azure/mlops-templates/.github/workflows/register-environment.yml@main
+      with:
+        resource_group: ${{ needs.get-config.outputs.resource_group }}
+        workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
+        environment_file:  mlops/azureml/train/train-env.yml
+        conda_file: data-science/environment/train-conda.yml
+      secrets:
+          AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+           
+  register-dataset:
     needs: get-config
-    uses: Azure/mlops-templates/.github/workflows/tf-gha-install-terraform.yml@main
+    uses: Azure/mlops-templates/.github/workflows/register-dataset.yml@main
     with:
-      TFAction: "apply"
-      dply_environment: ${{ needs.get-config.outputs.environment }}
-      location: ${{ needs.get-config.outputs.location }}
-      namespace: ${{ needs.get-config.outputs.namespace }}
-      postfix: ${{ needs.get-config.outputs.postfix }}
-      environment: ${{ needs.get-config.outputs.environment }}
-      enable_aml_computecluster: ${{ needs.get-config.outputs.enable_aml_computecluster == true }}
-      enable_monitoring: ${{ needs.get-config.outputs.enable_monitoring == true }}
-      terraform_version: ${{ needs.get-config.outputs.terraform_version }}
-      terraform_workingdir: ${{ needs.get-config.outputs.terraform_workingdir }}
-      terraform_st_location: ${{ needs.get-config.outputs.terraform_st_location }}
-      terraform_st_storage_account: ${{ needs.get-config.outputs.terraform_st_storage_account }}
-      terraform_st_resource_group: ${{ needs.get-config.outputs.terraform_st_resource_group }}
-      terraform_st_container_name: ${{ needs.get-config.outputs.terraform_st_container_name }}
-      terraform_st_key: ${{ needs.get-config.outputs.terraform_st_key }}
-      terraform_plan_location: ${{ needs.get-config.outputs.location }}
-      terraform_plan_vnet: "TBD"
+      resource_group: ${{ needs.get-config.outputs.resource_group }}
+      workspace_name: ${{ needs.get-config.outputs.aml_workspace }}
+      name: taxi-data
+      data_file: mlops/azureml/train/data.yml
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-
-  deploy-azureml-resources:
-    runs-on: ubuntu-latest
-    steps:
-      - id: deploy-aml-workspace
-        name: deploy-aml-workspace
-        run: echo "OK"
+       
+  create-compute:
+      needs: [get-config,register-environment,register-dataset]
+      uses: Azure/mlops-templates/.github/workflows/create-compute.yml@main
+      with:
+        cluster_name: cpu-cluster
+        size: Standard_DS3_v2
+        min_instances: 0
+        max_instances: 4
+        cluster_tier: low_priority
+        resource_group: ${{ needs.get-config.outputs.resource_group }}
+        workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
+      secrets:
+          AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+       
+  run-pipeline:
+      needs: [get-config,register-environment,create-compute,register-dataset]
+      uses: Azure/mlops-templates/.github/workflows/run-pipeline.yml@main
+      with:
+        resource_group: ${{ needs.get-config.outputs.resource_group }}
+        workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
+        parameters-file:  mlops/azureml/train/pipeline.yml
+        job-name: test
+      secrets:
+          AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
