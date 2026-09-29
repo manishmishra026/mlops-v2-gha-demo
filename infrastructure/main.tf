@@ -9,6 +9,13 @@ terraform {
 
 provider "azurerm" {
   features {}
+  
+  # Use OIDC authentication (for GitHub Actions)
+  use_oidc = true
+  
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+  client_id       = var.client_id
 }
 
 data "azurerm_client_config" "current" {}
