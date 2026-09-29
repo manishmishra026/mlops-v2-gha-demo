@@ -31,3 +31,7 @@ variable "client_secret" {
   default     = ""  # Add a default empty value
   sensitive   = true
 }
+variable "github_actions_service_principal_id" {
+  description = "Object ID of the GitHub Actions service principal"
+  type        = string
+}
